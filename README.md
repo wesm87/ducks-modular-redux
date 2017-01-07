@@ -1,115 +1,203 @@
-# Ducks: Redux Reducer Bundles
+# Flux Standard Action Ducks
 
-<img src="duck.jpg" align="right"/>
+## Proposal
 
-I find as I am building my redux app, one piece of functionality at a time, I keep needing to add  `{actionTypes, actions, reducer}` tuples for each use case. I have been keeping these in separate files and even separate folders, however 95% of the time, it's only one reducer/actions pair that ever needs their associated actions.
+Note: this is a modified version of the [original ducks proposal](https://github.com/erikras/ducks-modular-redux) that also uses the [Flux Standard Action](https://github.com/acdlite/flux-standard-action) specification.
 
-To me, it makes more sense for these pieces to be bundled together in an isolated module that is self contained, and can even be packaged easily into a library.
-
-## The Proposal
-
-### Example
-
-See also: [Common JS Example](CommonJs.md).
-
-```javascript
-// widgets.js
-
-// Actions
-const LOAD   = 'my-app/widgets/LOAD';
-const CREATE = 'my-app/widgets/CREATE';
-const UPDATE = 'my-app/widgets/UPDATE';
-const REMOVE = 'my-app/widgets/REMOVE';
-
-// Reducer
-export default function reducer(state = {}, action = {}) {
-  switch (action.type) {
-    // do reducer stuff
-    default: return state;
-  }
-}
-
-// Action Creators
-export function loadWidgets() {
-  return { type: LOAD };
-}
-
-export function createWidget(widget) {
-  return { type: CREATE, widget };
-}
-
-export function updateWidget(widget) {
-  return { type: UPDATE, widget };
-}
-
-export function removeWidget(widget) {
-  return { type: REMOVE, widget };
-}
-```
 ### Rules
 
-A module...
+A duck module...
 
-1. MUST `export default` a function called `reducer()`
-2. MUST `export` its action creators as functions
-3. MUST have action types in the form `npm-module-or-app/reducer/ACTION_TYPE`
-3. MAY export its action types as `UPPER_SNAKE_CASE`, if an external reducer needs to listen for them, or if it is a published reusable library
-
-These same guidelines are recommended for `{actionType, action, reducer}` bundles that are shared as reusable Redux libraries.
-
-### Name
-
-Java has jars and beans. Ruby has gems. I suggest we call these reducer bundles "ducks", as in the last syllable of "redux".
+1. MUST `export` all of the following:
+    - A `reducer` function.
+    - An `actionCreators` object.
+2. MAY `export` any of the following:
+    - An `actionTypes` object.
+    - An `initialState` object.
+3. MUST have action types defined as `UPPER_SNAKE_CASE` constants, with each value structured as follows: `package-or-app-name/duck-name/ACTION_TYPE`
 
 ### Usage
 
-You can still do:
+Import your ducks and export a combined `initialState` object and `reducer` function:
 
 ```javascript
+// ducks/index.js
+
 import { combineReducers } from 'redux';
-import * as reducers from './ducks/index';
 
-const rootReducer = combineReducers(reducers);
-export default rootReducer;
+import * as widgetsDuck from './widgets';
+import * as loginDuck from './login';
+
+export const initialState = {
+  widgets: widgetsDuck.intialState,
+  login: loginDuck.initialState,
+};
+
+export const reducer = combineReducers({
+  widgets: widgetsDuck.reducer,
+  login: loginDuck.reducer,
+});
 ```
 
-You can still do:
+Combine the ducks reducer with any third-party reducers you want to use and create your store:
 
 ```javascript
-import * as widgetActions from './ducks/widgets';
-```
-...and it will only import the action creators, ready to be passed to `bindActionCreators()`.
+// store/index.js
 
-There will be some times when you want to `export` something other than an action creator. That's okay, too. The rules don't say that you can *only* `export` action creators. When that happens, you'll just have to enumerate the action creators that you want. Not a big deal.
+import { createStore, combineReducers, applyMiddleware } from 'redux';
+import thunk from 'redux-thunk';
+import { reducer as formReducer } from 'redux-form';
+import { reducer, initialState } from '../ducks';
+
+const rootReducer = combineReducers({
+  app: reducer,
+  form: formReducer,
+});
+
+const enhancer = applyMiddleware(thunk);
+
+export default createStore(rootReducer, initialState, enhancer);
+```
+
+### Examples
+
+#### Simple duck
 
 ```javascript
-import {loadWidgets, createWidget, updateWidget, removeWidget} from './ducks/widgets';
-// ...
-bindActionCreators({loadWidgets, createWidget, updateWidget, removeWidget}, dispatch);
+// ducks/widgets.js
+
+const LOAD = 'my-app/widgets/LOAD';
+const CREATE = 'my-app/widgets/CREATE';
+const UPDATE = 'my-app/widgets/UPDATE';
+const DELETE = 'my-app/widgets/DELETE';
+
+export const actionTypes = { LOAD, CREATE, UPDATE, DELETE };
+
+export const actionCreators = {
+  loadWidgets() {
+    return {
+      type: LOAD,
+    };
+  },
+  createWidget(widget) {
+    return {
+      type: CREATE,
+      payload: widget,
+    };
+  },
+  updateWidget(widget) {
+    return {
+      type: UPDATE,
+      payload: widget,
+    };
+  },
+  removeWidget(widget) {
+    return {
+      type: REMOVE,
+      payload: widget,
+    };
+  },
+};
+
+export function reducer(state = {}, action = {}) {
+  switch (action.type) {
+    // do reducer stuff
+    default: {
+      return state;
+    }
+  }
+}
 ```
 
-### Example
+#### Async duck
 
-[React Redux Universal Hot Example](https://github.com/erikras/react-redux-universal-hot-example) uses ducks. See [`/src/redux/modules`](https://github.com/erikras/react-redux-universal-hot-example/tree/master/src/redux/modules).
+```javascript
+// ducks/login.js
 
-[Todomvc using ducks.](https://github.com/goopscoop/ga-react-tutorial/tree/6-reduxActionsAndReducers)
+const REQUEST = 'my-app/login/REQUEST';
+const SUCCESS = 'my-app/login/SUCCESS';
+const FAILURE = 'my-app/login/FAILURE';
 
-### Implementation
+export const actionTypes = { REQUEST, SUCCESS, FAILURE };
 
-The migration to this code structure was [painless](https://github.com/erikras/react-redux-universal-hot-example/commit/3fdf194683abb7c40f3cb7969fd1f8aa6a4f9c57), and I foresee it reducing much future development misery.
+// Note that these are only used internally
+// and therefore do not need to be exported.
+function loginRequest() {
+  return {
+    type: REQUEST,
+  }
+}
 
-Please submit any feedback via an issue or a tweet to [@erikras](https://twitter.com/erikras). It will be much appreciated.
+function loginSuccess(data) {
+  return {
+    type: SUCCESS,
+    payload: data,
+  }
+}
 
-Happy coding!
+function loginFailure(error) {
+  return {
+    type: FAILURE,
+    payload: error,
+    error: true,
+  }
+}
 
--- Erik Rasmussen
+export const actionCreators = {
+  // Async action creator (requires Redux Thunk middleware)
+  login(email, password) {
+    return dispatch => {
+      dispatch(loginRequest());
+        
+      const fetchInit = {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      };
 
+      return fetch('/login', fetchInit).then(
+        data => dispatch(loginSuccess(data)),
+        error => dispatch(loginFailure(error)),
+      );
+    };
+  },
+};
 
-### Translation
+export const initialState = {
+  user: null,
+};
 
-[한국어](https://github.com/JisuPark/ducks-modular-redux)
+export function reducer(state = initialState, action = {}) {
+  // do reducer stuff
+  default: {
+    return state;
+  }
+}
+```
 
----
+#### Using bound action creators in a component
 
-![C'mon! Let's migrate all our reducers!](migrate.jpg)
-> Photo credit to [Airwolfhound](https://www.flickr.com/photos/24874528@N04/3453886876/).
+```javascript
+/* @jsx */
+// components/MyComponent/index.js
+
+import React, { PureComponent } from 'react';
+import { bindActionCreators } from 'redux';
+import { connect } from 'react-redux';
+import { actionCreators } from '../ducks/widgets';
+import WidgetList from './WidgetList';
+
+@connect
+export default class MyComponent extends PureComponent {
+  render() {
+    const { dispatch } = this.props;
+    const boundActionCreators = bindActionCreators(actionCreators, dispatch);
+    
+    return (
+      <WidgetList {...boundActionCreators} />
+    );
+  }
+}
+```
