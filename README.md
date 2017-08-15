@@ -157,9 +157,9 @@ export const actionCreators = {
         body: JSON.stringify({ email, password }),
       }
 
-      return fetch('/login', fetchInit).then(
-        data => dispatch(loginSuccess(data)),
-        error => dispatch(loginFailure(error)),
+      return fetch('/login', fetchInit)
+        .then(data => dispatch(loginSuccess(data))
+        .catch(error => dispatch(loginFailure(error))
       )
     }
   },
@@ -180,8 +180,10 @@ export function reducer(state = initialState, action = {}) {
 #### Using bound action creators in a component
 
 ```javascript
-/* @jsx */
-// components/MyComponent/index.js
+/**
+ * @jsx
+ * components/MyComponent/index.js
+ */
 
 import React, { PureComponent } from 'react'
 import { bindActionCreators } from 'redux'
